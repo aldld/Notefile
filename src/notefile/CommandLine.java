@@ -8,6 +8,7 @@ import java.io.*;
 import java.util.List;
 import java.text.SimpleDateFormat;
 
+import notefile.db.DB;
 import notefile.db.Notes;
 import notefile.data.Note;
 
@@ -20,9 +21,9 @@ public class CommandLine {
 		// Get the path to the Notefile database.
 		// For now defaults to .notefile.db in the user's home directory
 		// TODO: Allow user to set custom database or "notebook"
-		String database = System.getProperty("user.home") + "/.notefile.db";
+		DB.path = System.getProperty("user.home") + "/.notefile.db";
 		
-		this.notes = new Notes(database);
+		this.notes = new Notes();
 		this.br = new BufferedReader(new InputStreamReader(System.in));
 		
 		if (interactive) {

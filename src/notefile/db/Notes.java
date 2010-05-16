@@ -12,16 +12,16 @@ import notefile.data.Note;
 
 public class Notes {
 	
-	// Database handling class
-	DB db;
-	
 	// Connect to the database.
 	// Create notes database table if it doesn't already exist.
-	public Notes(String databasePath) throws Exception {
-		this.db = new DB(databasePath);
+	public Notes() throws Exception {
+		//DB.path = databasePath;
+		if (!DB.initialized) {
+			DB.initDB();
+		}
 		
 		// If the notes table doesn't exist, create it.
-		this.db.stat.executeUpdate(
+		DB.stat.executeUpdate(
 				"CREATE TABLE IF NOT EXISTS notes (" +
 					"id INTEGER PRIMARY KEY," +
 					"note TEXT," +
@@ -31,82 +31,111 @@ public class Notes {
 				")");
 	}
 	
+	// Check if the database contains a table called "notes"
+	public boolean notesTableExists() throws Exception {
+		DB.rs = DB.stat.executeQuery(
+				"SELECT name FROM sqlite_master WHERE type='table' AND name='notes';");
+		
+		if (DB.rs.next()) {
+			DB.rs.close();
+			DB.stat.close();
+			
+			return true;
+		}
+		
+		DB.rs.close();
+		DB.stat.close();
+		
+		return false;
+	}
+	
 	// Insert a new record
-	public void addNote(String note, int category, String tags) throws Exception {
+	// Returns ID of added note
+	public int addNote(String note, int category, String tags) throws Exception {
 		long now = System.currentTimeMillis() / 1000;
 		
-		this.db.prep = this.db.conn.prepareStatement(
+		DB.prep = DB.conn.prepareStatement(
 				"INSERT INTO notes (note, category, tags, date) VALUES (" +
 				"?, ?, ?, ?)");
 		
-		this.db.prep.setString(1, note);
-		this.db.prep.setInt(2, category);
-		this.db.prep.setString(3, tags);
-		this.db.prep.setLong(4, now);
+		DB.prep.setString(1, note);
+		DB.prep.setInt(2, category);
+		DB.prep.setString(3, tags);
+		DB.prep.setLong(4, now);
 		
-		this.db.conn.setAutoCommit(false);
-		this.db.prep.executeUpdate();
-		this.db.conn.setAutoCommit(true);
+		DB.conn.setAutoCommit(false);
+		DB.prep.executeUpdate();
+		DB.conn.setAutoCommit(true);
 		
-		//this.db.prep.clearBatch();
-		//this.db.prep.clearParameters();
+		DB.rs = DB.prep.getGeneratedKeys();
+		
+		// Get the ID of the inserted row
+		if (DB.rs.next()) {
+			int id = DB.rs.getInt(1);
+			
+			DB.rs.close();
+			return id;
+		}
+		DB.rs.close();
+		
+		return 0;
 	}
 	
 	// Update a record
 	public void updateNote(int id, String note, String tags) throws Exception {
-		this.db.prep = this.db.conn.prepareStatement(
+		DB.prep = DB.conn.prepareStatement(
 				"UPDATE notes SET note=?, tags=? WHERE id=?");
 		
-		this.db.prep.setString(1, note);
-		this.db.prep.setString(2, tags);
-		this.db.prep.setInt(3, id);
+		DB.prep.setString(1, note);
+		DB.prep.setString(2, tags);
+		DB.prep.setInt(3, id);
 		
-		this.db.conn.setAutoCommit(false);
-		this.db.prep.executeUpdate();
-		this.db.conn.setAutoCommit(true);
+		DB.conn.setAutoCommit(false);
+		DB.prep.executeUpdate();
+		DB.conn.setAutoCommit(true);
 		
-		//this.db.prep.clearBatch();
-		//this.db.prep.clearParameters();
+		//DB.prep.clearBatch();
+		//DB.prep.clearParameters();
 	}
 	
 	// Delete a record
 	public void deleteNote(int id) throws Exception {
-		this.db.prep = this.db.conn.prepareStatement(
+		DB.prep = DB.conn.prepareStatement(
 				"DELETE FROM notes WHERE id=?");
 		
-		this.db.prep.setInt(1, id);
+		DB.prep.setInt(1, id);
 		
-		this.db.conn.setAutoCommit(false);
-		this.db.prep.executeUpdate();
-		this.db.conn.setAutoCommit(true);
+		DB.conn.setAutoCommit(false);
+		DB.prep.executeUpdate();
+		DB.conn.setAutoCommit(true);
 	}
 	
 	// Get a single record by ID
 	public Note getRecord(int id) throws Exception {
 		Note note = new Note();
 		
-		this.db.prep = this.db.conn.prepareStatement(
+		DB.prep = DB.conn.prepareStatement(
 				"SELECT note, category, tags, date FROM notes WHERE id=?");
 		
-		this.db.prep.setInt(1, id);
+		DB.prep.setInt(1, id);
 		
-		this.db.rs = this.db.prep.executeQuery();
+		DB.rs = DB.prep.executeQuery();
 		
-		if (this.db.rs.next()) {
+		if (DB.rs.next()) {
 			note.id = id;
-			note.note = this.db.rs.getString("note");
-			note.category = this.db.rs.getInt("category");
-			note.date = this.db.rs.getLong("date");
+			note.note = DB.rs.getString("note");
+			note.category = DB.rs.getInt("category");
+			note.date = DB.rs.getLong("date");
 			
 			// Parse tags
-			note.parseTags(this.db.rs.getString("tags"));
+			note.parseTags(DB.rs.getString("tags"));
 			
-			this.db.rs.close();
+			DB.rs.close();
 			
 			return note;
 		}
 		
-		this.db.rs.close();
+		DB.rs.close();
 		
 		// No row found returns null
 		return null;
@@ -116,26 +145,26 @@ public class Notes {
 	public List<Note> getAll() throws Exception {
 		List<Note> notes = new ArrayList<Note>();
 		
-		this.db.rs = this.db.stat.executeQuery(
+		DB.rs = DB.stat.executeQuery(
 				"SELECT id, note, category, tags, date FROM notes");
 		
 		// Temporary HashMap for storing individual rows
-		while (this.db.rs.next()) {
+		while (DB.rs.next()) {
 			Note note = new Note();
 			
-			note.id = this.db.rs.getInt("id");
-			note.note = this.db.rs.getString("note");
-			note.category = this.db.rs.getInt("category");
-			note.date = this.db.rs.getLong("date");
+			note.id = DB.rs.getInt("id");
+			note.note = DB.rs.getString("note");
+			note.category = DB.rs.getInt("category");
+			note.date = DB.rs.getLong("date");
 			
 			// Parse tags
-			note.parseTags(this.db.rs.getString("tags"));
+			note.parseTags(DB.rs.getString("tags"));
 			
 			notes.add(note);
 		}
 		
-		this.db.rs.close();
-		this.db.stat.close();
+		DB.rs.close();
+		DB.stat.close();
 		
 		// No row found returns an empty List
 		return notes;
@@ -145,28 +174,28 @@ public class Notes {
 	public List<Note> getFromCategory(int category) throws Exception {
 		List<Note> notes = new ArrayList<Note>();
 		
-		this.db.prep = this.db.conn.prepareStatement(
+		DB.prep = DB.conn.prepareStatement(
 				"SELECT id, note, tags, date FROM notes WHERE category=?");
 		
-		this.db.prep.setInt(1, category);
+		DB.prep.setInt(1, category);
 		
-		this.db.rs = this.db.prep.executeQuery();
+		DB.rs = DB.prep.executeQuery();
 		
-		while (this.db.rs.next()) {
+		while (DB.rs.next()) {
 			Note note = new Note();
 			
-			note.id = this.db.rs.getInt("id");
-			note.note = this.db.rs.getString("note");
+			note.id = DB.rs.getInt("id");
+			note.note = DB.rs.getString("note");
 			note.category = category;
-			note.date = this.db.rs.getLong("date");
+			note.date = DB.rs.getLong("date");
 			
 			// Parse tags
-			note.parseTags(this.db.rs.getString("tags"));
+			note.parseTags(DB.rs.getString("tags"));
 			
 			notes.add(note);
 		}
 		
-		this.db.rs.close();
+		DB.rs.close();
 		
 		return notes;
 		
@@ -174,51 +203,69 @@ public class Notes {
 	
 	// Get records by tag (in category)
 	public List<Note> getByTag(int category, String tag) throws Exception {
+		String[] tags = { tag };
+		return getByTag(category, tags);
+	}
+	
+	public List<Note> getByTag(int category, String[] tags) throws Exception {
 		List<Note> notes = new ArrayList<Note>();
 		
-		this.db.prep = this.db.conn.prepareStatement(
-				"SELECT id, note, tags, date FROM notes WHERE category=?" +
-				"AND tags LIKE (SELECT '%' || ? || '%')");
+		String sql = "SELECT id, note, tags, date FROM notes WHERE category=? ";
 		
-		this.db.prep.setInt(1, category);
-		this.db.prep.setString(2, tag);
+		for (int i = 0; i < tags.length; i++) {
+			if (i == 0) {
+				sql = sql + "AND tags LIKE (SELECT '%' || ? || '%') ";
+			} else {
+				sql = sql + "OR tags LIKE (SELECT '%' || ? || '%') ";
+			}
+		}
 		
-		this.db.rs = this.db.prep.executeQuery();
+		DB.prep = DB.conn.prepareStatement(sql);
 		
-		while (this.db.rs.next()) {
+		DB.prep.setInt(1, category);
+		
+		int i = 1;
+		for (String tag : tags) {
+			i++;
+			DB.prep.setString(i, tag);
+		}
+		
+		DB.rs = DB.prep.executeQuery();
+		
+		while (DB.rs.next()) {
 			Note note = new Note();
 			
-			note.id = this.db.rs.getInt("id");
-			note.note = this.db.rs.getString("note");
+			note.id = DB.rs.getInt("id");
+			note.note = DB.rs.getString("note");
 			note.category = category;
-			note.date = this.db.rs.getLong("date");
+			note.date = DB.rs.getLong("date");
 			
 			// Parse tags
-			note.parseTags(this.db.rs.getString("tags"));
+			note.parseTags(DB.rs.getString("tags"));
 			
 			notes.add(note);
 		}
 		
-		this.db.rs.close();
+		DB.rs.close();
 		
 		return notes;
 	}
 	
 	// Check if a record exists
 	public boolean noteExists(int id) throws Exception {
-		this.db.rs = this.db.stat.executeQuery(
+		DB.rs = DB.stat.executeQuery(
 				"SELECT 1 FROM notes WHERE id=" + id);
 		
-		if (this.db.rs.next()) {
+		if (DB.rs.next()) {
 			
-			this.db.rs.close();
-			this.db.stat.close();
+			DB.rs.close();
+			DB.stat.close();
 			
 			return true;
 		}
 		
-		this.db.rs.close();
-		this.db.stat.close();
+		DB.rs.close();
+		DB.stat.close();
 		
 		return false;
 	}

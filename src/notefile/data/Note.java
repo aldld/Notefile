@@ -4,12 +4,13 @@ public class Note {
 	
 	public int id;
 	public String note;
-	public int category;
+	public int category = 1;
 	public String[] tags;
 	public long date;
 	
 	// Parses tags from a space-separated string
 	public void parseTags(String tags) {
+		this.tags = null;
 		this.tags = tags.split(" ");
 	}
 	
